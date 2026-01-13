@@ -19,8 +19,7 @@
     "@stripe/react-stripe-js": "^2.9.0",
     "@reduxjs/toolkit": "^1.9.5",
     "react-redux": "^8.1.1",
-    "@tanstack/react-query": "^4.29.0",
-    "react-query": "^4.13.0"
+    "@tanstack/react-query": "^4.29.0"
   },
   "devDependencies": {
     "@types/react": "^18.2.22",
