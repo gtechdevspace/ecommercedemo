@@ -1,0 +1,77 @@
+name: Integration Tests
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ main ]
+
+jobs:
+  integration:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    services:
+      docker:
+        image: docker:20-dind
+        options: --privileged
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v2
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
+      - name: Install Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+      - name: Install dependencies
+        run: npm ci --workspaces
+      - name: Docker compose up
+        run: |
+          docker-compose -f docker-compose.dev.yml up -d --build --remove-orphans
+      - name: Wait for Postgres
+        run: ./scripts/wait_for.sh localhost:5432 120
+      - name: Wait for Mongo
+        run: ./scripts/wait_for.sh localhost:27017 120
+      - name: Wait for Redis
+        run: ./scripts/wait_for.sh localhost:6379 120
+      - name: Wait for LocalStack
+        run: ./scripts/wait_for.sh localhost:4566 120
+      - name: Wait for Order service
+        run: ./scripts/wait_for.sh localhost:4200 120
+      - name: Wait for Product service
+        run: ./scripts/wait_for.sh localhost:4400 120
+      - name: Wait for Cart service
+        run: ./scripts/wait_for.sh localhost:4500 120
+      - name: Seed DB
+        run: ./scripts/seed_local.sh
+      - name: Run integration test (capture output)
+        run: |
+          npx ts-node tests/integration/order-flow.test.ts > integration_result.txt 2>&1 || true
+          cat integration_result.txt
+      - name: Check integration result and fail if needed
+        if: always()
+        run: |
+          if grep -q "Integration test passed" integration_result.txt; then
+            echo "Integration test passed"
+          else
+            echo "Integration test failed"
+            exit 1
+          fi
+      - name: Collect docker logs
+        if: always()
+        run: docker-compose -f docker-compose.dev.yml logs > integration_logs.txt || true
+      - name: Upload integration logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: integration_logs
+          path: integration_logs.txt
+      - name: Upload integration result
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: integration_result
+          path: integration_result.txt
+      - name: Docker compose down
+        if: always()
+        run: docker-compose -f docker-compose.dev.yml down -v || true

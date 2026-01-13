@@ -1,0 +1,16 @@
+node_modules/
+dist/
+.env
+.env.*
+.DS_Store
+coverage/
+.nyc_output/
+
+# Docker
+docker-compose.override.yml
+
+# Local logs
+*.log
+
+# VSCode
+.vscode/

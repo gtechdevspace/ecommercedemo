@@ -1,0 +1,16 @@
+{
+  "name": "ecommercedemo",
+  "private": true,
+  "workspaces": [
+    "services/*",
+    "frontend"
+  ],
+  "scripts": {
+    "bootstrap": "npm install",
+    "start:dev": "echo 'Use service-specific start scripts'",
+    "lint": "eslint . --ext .ts,.tsx,.js",
+    "test": "echo 'Run service-specific tests'",
+    "test:workspaces": "npm workspaces run test --if-present"
+  },
+  "devDependencies": {}
+}

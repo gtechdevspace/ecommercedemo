@@ -1,0 +1,127 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:15
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: ecommerce
+    ports:
+      - '5432:5432'
+    volumes:
+      - pg-data:/var/lib/postgresql/data
+
+  mongo:
+    image: mongo:6.0
+    ports:
+      - '27017:27017'
+    volumes:
+      - mongo-data:/data/db
+
+  redis:
+    image: redis:7
+    ports:
+      - '6379:6379'
+
+  localstack:
+    image: localstack/localstack
+    environment:
+      - SERVICES=sns,sqs
+      - DEFAULT_REGION=us-east-1
+    ports:
+      - '4566:4566'
+
+  auth-service:
+    build: ./services/auth
+    environment:
+      - MONGO_URI=mongodb://mongo:27017/ecommerce
+    depends_on:
+      - mongo
+    ports:
+      - '4000:4000'
+
+  order-service:
+    build: ./services/order
+    environment:
+      - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/ecommerce
+      - ORDER_TOPIC_ARN=arn:aws:sns:us-east-1:000000000000:order-topic
+      - AWS_ENDPOINT=http://localstack:4566
+      - AWS_REGION=us-east-1
+    depends_on:
+      - postgres
+      - localstack
+    ports:
+      - '4200:4200'
+
+  inventory-service:
+    build: ./services/inventory
+    environment:
+      - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/ecommerce
+      - INVENTORY_QUEUE_URL=http://localstack:4566/000000000000/inventory-queue
+      - INVENTORY_TOPIC_ARN=arn:aws:sns:us-east-1:000000000000:inventory-topic
+      - AWS_ENDPOINT=http://localstack:4566
+      - AWS_REGION=us-east-1
+    depends_on:
+      - postgres
+      - localstack
+
+  payment-service:
+    build: ./services/payment
+    environment:
+      - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/ecommerce
+      - STRIPE_SECRET=sk_test_xxx
+      - STRIPE_MOCK=true
+      - PAYMENT_TOPIC_ARN=arn:aws:sns:us-east-1:000000000000:payment-topic
+      - PAYMENT_QUEUE_URL=http://localstack:4566/000000000000/payment-queue
+      - AWS_ENDPOINT=http://localstack:4566
+      - AWS_REGION=us-east-1
+    depends_on:
+      - postgres
+      - localstack
+    ports:
+      - '4300:4300'
+
+  notification-service:
+    build: ./services/notification
+    environment:
+      - PAYMENT_QUEUE_URL=http://localstack:4566/000000000000/payment-queue
+      - AWS_ENDPOINT=http://localstack:4566
+      - AWS_REGION=us-east-1
+    depends_on:
+      - localstack
+
+  frontend:
+    build: ./frontend
+    environment:
+      - VITE_API_BASE=http://order-service:4200
+      - VITE_STRIPE_KEY=pk_test_xxx
+    ports:
+      - '3000:3000'
+    depends_on:
+      - order-service
+
+  product-service:
+    build: ./services/product
+    environment:
+      - MONGO_URI=mongodb://mongo:27017/ecom
+      - REDIS_URL=redis://redis:6379
+    depends_on:
+      - mongo
+      - redis
+    ports:
+      - '4400:4400'
+
+  cart-service:
+    build: ./services/cart
+    environment:
+      - MONGO_URI=mongodb://mongo:27017/ecom
+    depends_on:
+      - mongo
+    ports:
+      - '4500:4500'
+
+volumes:
+  pg-data:
+  mongo-data:
+  localstack-data:
