@@ -24,7 +24,17 @@ jobs:
         with:
           node-version: '18'
       - name: Install dependencies
-        run: npm ci --workspaces
+        run: |
+          set -eo pipefail
+          echo "Starting npm ci --workspaces (output to ci_install_output.txt)"
+          npm ci --workspaces 2>&1 | tee ci_install_output.txt || true
+          echo "npm ci finished (exit code preserved); continuing to collect logs"
+      - name: Upload install logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ci_install_output
+          path: ci_install_output.txt
       - name: Docker compose up
         run: |
           docker-compose -f docker-compose.dev.yml up -d --build --remove-orphans
