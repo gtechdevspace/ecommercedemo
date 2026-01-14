@@ -28,13 +28,24 @@ jobs:
           set -eo pipefail
           echo "Starting npm ci --workspaces (output to ci_install_output.txt)"
           npm ci --workspaces 2>&1 | tee ci_install_output.txt || true
-          echo "npm ci finished (exit code preserved); continuing to collect logs"
+          rc=${PIPESTATUS[0]:-1}
+          echo $rc > ci_install_exit
+          echo "npm ci finished (exit code preserved: $rc); continuing to collect logs"
       - name: Upload install logs
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: ci_install_output
           path: ci_install_output.txt
+
+      - name: Fail if npm install failed
+        if: always()
+        run: |
+          rc=$(cat ci_install_exit || echo 0)
+          if [ "$rc" -ne 0 ]; then
+            echo "npm ci failed with rc=$rc"
+            exit $rc
+          fi
       - name: Docker compose up
         run: |
           docker-compose -f docker-compose.dev.yml up -d --build --remove-orphans
