@@ -46,9 +46,22 @@ jobs:
             echo "npm ci failed with rc=$rc"
             exit $rc
           fi
-      - name: Docker compose up
+      - name: Show Docker info
         run: |
-          docker-compose -f docker-compose.dev.yml up -d --build --remove-orphans
+          set -eo pipefail
+          echo "== Docker version =="
+          docker version || true
+          echo "== Docker info =="
+          docker info || true
+          echo "== Docker Compose version (try both) =="
+          docker-compose version || docker compose version || true
+
+      - name: Docker compose up
+        uses: docker/compose-action@v2
+        with:
+          files: docker-compose.dev.yml
+          args: up -d --build --remove-orphans
+
       - name: Wait for Postgres
         run: ./scripts/wait_for.sh localhost:5432 120
       - name: Wait for Mongo
@@ -80,7 +93,13 @@ jobs:
           fi
       - name: Collect docker logs
         if: always()
-        run: docker-compose -f docker-compose.dev.yml logs > integration_logs.txt || true
+        run: |
+          set -eo pipefail
+          # Try both docker-compose and docker compose, write to integration_logs.txt
+          docker-compose -f docker-compose.dev.yml logs > integration_logs.txt 2>&1 || true
+          if [ ! -s integration_logs.txt ]; then
+            docker compose -f docker-compose.dev.yml logs > integration_logs.txt 2>&1 || true
+          fi
       - name: Upload integration logs
         if: always()
         uses: actions/upload-artifact@v4
