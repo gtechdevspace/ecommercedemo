@@ -8,9 +8,11 @@ export const sns = new SNSClient({
 });
 
 export async function publishOrderCreated(topicArn: string, payload: any) {
-  const cmd = new PublishCommand({
-    TopicArn: topicArn,
-    Message: JSON.stringify(payload)
-  });
+  const cmd = new PublishCommand({ TopicArn: topicArn, Message: JSON.stringify(payload) });
+  await sns.send(cmd);
+}
+
+export async function publishOrderUpdated(topicArn: string, payload: any) {
+  const cmd = new PublishCommand({ TopicArn: topicArn, Message: JSON.stringify(payload) });
   await sns.send(cmd);
 }

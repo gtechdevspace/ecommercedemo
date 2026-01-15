@@ -13,6 +13,6 @@ Local dev notes:
 - Use `AWS_ENDPOINT=http://localstack:4566` in service env for local SDK clients.
 
 Next steps:
-- Implement Inventory reservation SQL & compensation on failure.
-- Add Payment idempotency and retry logic (exponential backoff).
-- Add integration tests covering the full flow with localstack and Postgres.
+- Implemented: Inventory reservation SQL & compensation on payment failure (Inventory will release reservations on PAYMENT_FAILED / ORDER_CANCELLED events).
+- Add Payment idempotency and retry logic (exponential backoff) — partial: payment retries already present in `processPayment`.
+- Add integration tests covering the full flow with localstack and Postgres (planned).

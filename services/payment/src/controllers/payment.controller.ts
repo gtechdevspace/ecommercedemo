@@ -23,17 +23,43 @@ export const stripeWebhook = async (req: Request, res: Response, next: NextFunct
   const raw = (req as any).rawBody;
   try {
     const event = stripe.webhooks.constructEvent(raw, sig, process.env.STRIPE_WEBHOOK_SECRET || 'whsec_test');
+
     if (event.type === 'payment_intent.succeeded') {
       const pi: any = event.data.object;
-      const payload = { event: 'PAYMENT_SUCCEEDED', data: { stripe_id: pi.id, amount: (pi.amount / 100), currency: pi.currency } };
+
+      // Idempotency: check if payment already exists and is succeeded
+      try {
+        const client = await pool.connect();
+        try {
+          const ex = await client.query('SELECT status FROM payments WHERE stripe_payment_id = $1', [pi.id]);
+          if (ex.rows.length > 0 && ex.rows[0].status === 'succeeded') {
+            res.json({ received: true });
+            return;
+          }
+        } finally {
+          client.release();
+        }
+      } catch (e) {
+        // non-fatal
+      }
+
+      // attempt to extract order id from metadata if available
+      const orderId = (pi.metadata && (pi.metadata.order_id || pi.metadata.orderId)) || undefined;
+      const payload: any = { event: 'PAYMENT_SUCCEEDED', data: { stripe_id: pi.id, amount: (pi.amount / 100), currency: pi.currency } };
+      if (orderId) payload.data.order_id = Number(orderId);
+
       if (process.env.PAYMENT_TOPIC_ARN) await publishPaymentEvent(process.env.PAYMENT_TOPIC_ARN, payload);
     } else if (event.type === 'payment_intent.payment_failed') {
       const pi: any = event.data.object;
-      const payload = { event: 'PAYMENT_FAILED', data: { stripe_id: pi.id } };
+      const orderId = (pi.metadata && (pi.metadata.order_id || pi.metadata.orderId)) || undefined;
+      const payload: any = { event: 'PAYMENT_FAILED', data: { stripe_id: pi.id } };
+      if (orderId) payload.data.order_id = Number(orderId);
       if (process.env.PAYMENT_TOPIC_ARN) await publishPaymentEvent(process.env.PAYMENT_TOPIC_ARN, payload);
     }
+
     res.json({ received: true });
   } catch (err: any) {
+    // For webhook security don't leak details, log and return 400
     next(err);
   }
 };

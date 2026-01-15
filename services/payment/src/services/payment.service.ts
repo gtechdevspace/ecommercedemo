@@ -36,9 +36,9 @@ export async function processPayment(pool: Pool, orderId: number, amount: number
     const createIntent = async () => {
       if (process.env.STRIPE_MOCK === 'true') {
         // return a mocked PaymentIntent-like object for local testing
-        return { id: `pi_mock_${Date.now()}`, status: 'succeeded', amount: Math.round(amount * 100), currency: 'usd' } as any;
+        return { id: `pi_mock_${Date.now()}`, status: 'succeeded', amount: Math.round(amount * 100), currency: 'usd', metadata: { order_id: orderId } } as any;
       }
-      return await stripe.paymentIntents.create({ amount: Math.round(amount * 100), currency: 'usd', payment_method }, { idempotencyKey });
+      return await stripe.paymentIntents.create({ amount: Math.round(amount * 100), currency: 'usd', payment_method, metadata: { order_id: String(orderId) } }, { idempotencyKey });
     };
     const pi = await retry(createIntent, 3, 300);
 
@@ -54,9 +54,17 @@ export async function processPayment(pool: Pool, orderId: number, amount: number
 
     await client.query('COMMIT');
     return { ...payment, idempotent: false };
-  } catch (err) {
+  } catch (err: any) {
     await client.query('ROLLBACK');
     logger.error('Payment processing failed', err);
+    // Publish a PAYMENT_FAILED event for downstream compensation
+    try {
+      if (process.env.PAYMENT_TOPIC_ARN) {
+        await publishPaymentEvent(process.env.PAYMENT_TOPIC_ARN as string, { event: 'PAYMENT_FAILED', data: { order_id: orderId, reason: err.message } });
+      }
+    } catch (pubErr) {
+      logger.error('Failed to publish PAYMENT_FAILED event', pubErr);
+    }
     throw err;
   } finally {
     client.release();

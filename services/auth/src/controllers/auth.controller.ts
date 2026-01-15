@@ -29,7 +29,19 @@ export const refreshToken = async (req: Request, res: Response, next: NextFuncti
     const { token } = req.body;
     const newToken = await refreshAccessToken(token);
     if (!newToken) return res.status(401).json({ message: 'Invalid refresh token' });
+    // returns { access, refresh }
     res.json(newToken);
+  } catch (err) {
+    next(err);
+  }
+};
+
+export const logout = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { token } = req.body;
+    const ok = await revokeRefreshToken(token);
+    if (!ok) return res.status(400).json({ message: 'Invalid token' });
+    res.json({ revoked: true });
   } catch (err) {
     next(err);
   }

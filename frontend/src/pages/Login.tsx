@@ -12,7 +12,7 @@ export default function Login() {
     e.preventDefault();
     try {
       const res = await api.post('/api/auth/login', { email, password });
-      dispatch(setCredentials({ access: res.data.access, refresh: res.data.refresh }));
+      dispatch(setCredentials({ access: res.data.access, refresh: res.data.refresh, role: res.data.role }));
       alert('Logged in');
     } catch (err: any) {
       alert('Login failed');

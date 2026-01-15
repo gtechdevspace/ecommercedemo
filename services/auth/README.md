@@ -20,5 +20,5 @@ API
 - POST /api/auth/refresh { token }
 
 Notes
-- Refresh token persistence and rotation will be added next (refresh token store, revocation, idempotency)
+- Refresh tokens are persisted (with JTI), rotated on refresh, and can be revoked via POST /api/auth/logout { token }
 - Use `services/_template/README.md` when creating new services

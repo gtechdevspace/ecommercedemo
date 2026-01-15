@@ -7,11 +7,17 @@ const pool = createPool();
 export const createOrder = async (req: Request, res: Response, next: NextFunction) => {
   const client = await pool.connect();
   try {
-    const { user_id, items, total } = req.body;
+    const authReq = req as any;
+    const userId = authReq.user?.sub;
+    if (!userId) return res.status(401).json({ message: 'Unauthorized' });
+
+    const { items, total } = req.body;
+    if (!Array.isArray(items) || items.length === 0) return res.status(400).json({ message: 'Items are required' });
+
     await client.query('BEGIN');
     const insertText = 'INSERT INTO orders(user_id, items, total, status) VALUES($1, $2, $3, $4) RETURNING id, created_at';
-    const result = await client.query(insertText, [user_id, JSON.stringify(items), total, 'created']);
-    const order = { id: result.rows[0].id, user_id, items, total, status: 'created', created_at: result.rows[0].created_at };
+    const result = await client.query(insertText, [userId, JSON.stringify(items), total, 'created']);
+    const order = { id: result.rows[0].id, user_id: userId, items, total, status: 'created', created_at: result.rows[0].created_at };
 
     // Publish event to SNS for downstream consumers (inventory, payment, notification)
     await publishOrderCreated(process.env.ORDER_TOPIC_ARN || 'arn:aws:sns:us-east-1:000000000000:order-topic', { event: 'ORDER_CREATED', data: order });

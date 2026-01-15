@@ -12,11 +12,17 @@ function CheckoutForm() {
   const handleSubmit = async (e: any) => {
     e.preventDefault();
     setLoading(true);
-    // For demo: call Payment Service endpoint to create a PaymentIntent / charge
+    // generate an idempotency key for the charge
+    const idempotencyKey = `charge_${Date.now()}`;
+
     try {
-      const res = await fetch('/api/payment/charge', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ amount: 9.99, payment_method: 'pm_card_visa', order_id: 1 }) });
+      const res = await fetch('/api/payment/charge', { method: 'POST', headers: { 'Content-Type': 'application/json', 'idempotency-key': idempotencyKey }, body: JSON.stringify({ amount: 9.99, payment_method: 'pm_card_visa', order_id: 1 }) });
       const data = await res.json();
-      alert('Payment result: ' + JSON.stringify(data));
+      if (data && data.idempotent) {
+        alert('Payment was idempotent: ' + JSON.stringify(data));
+      } else {
+        alert('Payment result: ' + JSON.stringify(data));
+      }
     } catch (err) {
       alert('Payment failed: ' + (err as any).message);
     } finally {

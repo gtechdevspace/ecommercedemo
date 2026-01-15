@@ -3,7 +3,7 @@ import { Pool } from 'pg';
 import dotenv from 'dotenv';
 import logger from '../utils/logger';
 import { createPool } from '../db/pg';
-import { reserveItems, InventoryError } from '../services/inventory.service';
+import { reserveItems, InventoryError, releaseReservations } from '../services/inventory.service';
 import { publishInventoryEvent } from '../producer/snsClient';
 
 dotenv.config();
@@ -32,6 +32,15 @@ export async function pollInventoryQueue() {
           } catch (err: any) {
             logger.error('Failed to reserve inventory for order', { orderId: order.id, err: err.message });
             if (topicArn) await publishInventoryEvent(topicArn, { event: 'INVENTORY_FAILED', data: { orderId: order.id, reason: err.message } });
+          }
+        } else if (body.event === 'PAYMENT_FAILED' || body.event === 'ORDER_CANCELLED') {
+          const orderId = body.data.order_id || body.data.orderId || body.data.orderId;
+          try {
+            const rel = await releaseReservations(pool, orderId);
+            if (topicArn) await publishInventoryEvent(topicArn, { event: 'INVENTORY_RELEASED', data: { orderId, result: rel } });
+          } catch (err: any) {
+            logger.error('Failed to release reservations for order', { orderId, err: err.message });
+            if (topicArn) await publishInventoryEvent(topicArn, { event: 'INVENTORY_RELEASE_FAILED', data: { orderId, reason: err.message } });
           }
         }
         // Delete message

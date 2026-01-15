@@ -42,3 +42,34 @@ export async function reserveItems(pool: Pool, orderId: number, items: Array<{ p
     client.release();
   }
 }
+
+export async function releaseReservations(pool: Pool, orderId: number) {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    // Find reservations for this order that are currently reserved
+    const resv = await client.query('SELECT product_id, qty FROM reservations WHERE order_id = $1 AND status = $2 FOR UPDATE', [orderId, 'reserved']);
+    if (resv.rows.length === 0) {
+      await client.query('COMMIT');
+      logger.info('No reservations to release', { orderId });
+      return { status: 'no_reservations' };
+    }
+
+    for (const r of resv.rows) {
+      const { product_id, qty } = r;
+      // Return stock and reduce reserved
+      await client.query('UPDATE inventory SET stock = stock + $1, reserved = GREATEST(reserved - $1, 0), updated_at = now() WHERE product_id = $2', [qty, product_id]);
+      await client.query('UPDATE reservations SET status = $1 WHERE order_id = $2 AND product_id = $3', ['released', orderId, product_id]);
+    }
+
+    await client.query('COMMIT');
+    return { status: 'released' };
+  } catch (err) {
+    await client.query('ROLLBACK');
+    logger.error('Failed to release reservations', err);
+    throw new InventoryError('Inventory release failed');
+  } finally {
+    client.release();
+  }
+}
