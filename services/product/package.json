@@ -19,7 +19,7 @@
     "helmet": "^6.0.1",
     "mongoose": "^7.5.0",
     "redis": "^4.5.1",
-    "express-mongo-sanitize": "^3.0.0",
+    "express-mongo-sanitize": "^2.2.0",
     "winston": "^3.8.2"
   },
   "devDependencies": {
